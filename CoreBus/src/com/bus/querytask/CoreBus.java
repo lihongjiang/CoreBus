@@ -1,6 +1,11 @@
 package com.bus.querytask;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map.Entry;
+import java.util.UUID;
+
+import com.bslee.log.SysLog;
 
 import android.os.Handler;
 import android.os.Message;
@@ -13,40 +18,48 @@ import android.util.Log;
  */
 public class CoreBus {
 
-	// 统一处理UI总线
-	// private Handler mainHandler = new Handler();
-
-	// 内部消息处理总线,各自处理自己的界面更新
+	// 统一处理UI界面更新
+	private Handler mainHandler = new Handler();
+	// 内部消息处理总线,各自处理自己的消息分发
 	private Handler handler;
 	// 任务托管
-	private LinkedHashSet<CoreThread> sets = new LinkedHashSet<CoreThread>();
-
+	private LinkedHashMap<UUID, CallQueryTask> tasks = new LinkedHashMap<UUID, CallQueryTask>();
 	// 总线创建
 	public CoreBus(String name) {
-		sets.clear();
-		CoreManager workhandler = new CoreManager(name) {
-
+		tasks.clear();
+		CpuCore workhandler = new CpuCore(name) {
 			@Override
-			public boolean handleMessage(Message msg) {
-				Log.v("test", "task end");
-				for (final CoreThread hr : sets) {
-					if (hr != null && hr.taskId == msg.what) {
-						handler.post(new Runnable() {
+			public boolean handleMessage(final Message msg) {
+				if (0x8888 == msg.what) {
+					final UUID  uuid=(UUID) msg.obj;
+					final CallQueryTask task = tasks.get(uuid);
+					if (task!=null) {
+						SysLog.show("CoreBus", "任务实例存在");
+						// 必须是主线程的消息Handler处理器
+						mainHandler.post(new Runnable() {
 							@Override
 							public void run() {
-								Log.v("test", "task callback");
-								hr.task.onComplete();
+								SysLog.show("CoreBus", "任务完成开始回调:"+uuid.toString());
+								try {
+									task.onComplete();
+									//防止Activity退出,线程未移除,回调导致ANR
+								} catch (Exception e) {
+									SysLog.show("CoreBus", "异常抓住"+uuid.toString());
+									e.printStackTrace();
+								}
+								SysLog.show("CoreBus", "任务完成结束回调:"+uuid.toString());
 							}
 						});
-						return true;// 表示消息已经消息
-					}
+					}else{
+						SysLog.show("CoreBus", "任务实例不存在");
+					}		
 				}
-				return super.handleMessage(msg);
+				return false;
 			}
 		};
 		workhandler.setPriority(Thread.MIN_PRIORITY);
 		workhandler.start();
-		Log.v("test", workhandler.getName());
+		SysLog.show("CoreBus", "CPU名称:"+workhandler.getName());
 		// 工作hander在非UI线程中自己给自己发消息处理,可以实现单核单任务模型
 		handler = new Handler(workhandler.getLooper(), workhandler);
 	}
@@ -56,26 +69,25 @@ public class CoreBus {
 	 * 
 	 * @param task
 	 */
-	public void postQueryTask(CoreThread task) {
+	public void postQueryTask(QueryTask task) {
 		task.handler = handler;
-		sets.add(task);
+		tasks.put(task.taskId,  task);
 		handler.post(task);
+		SysLog.show("CoreBus", "任务开始运行:"+task.taskId.toString());
+		SysLog.show("CoreBus", "任务总大小:"+tasks.size());
 	}
-
+	
 	/**
 	 * 取消存在任务实例
 	 * 
 	 * @param task
 	 */
-	public void removeQueryTask(CoreThread task) {
+	public synchronized void removeQueryTask(QueryTask task) {
 		if (handler != null) {
-			for (CoreThread t : sets) {
-				if (t != null && t == task) {
-					handler.removeCallbacks(task);
-					Log.v("test", "task cancel");
-					return;
-				}
-			}
+			tasks.remove(task.taskId);
+			handler.removeCallbacks(task);
+			SysLog.show("CoreBus", "任务结束"+task.taskId.toString());
+			SysLog.show("CoreBus", "任务结束tasks大小:"+tasks.size());
 		}
 	}
 
@@ -84,16 +96,21 @@ public class CoreBus {
 	 * 
 	 * @param task
 	 */
-	public void removeQueryTask(int taskId) {
+	public synchronized void removeQueryTask(UUID taskId) {
 		if (handler != null) {
-			for (CoreThread t : sets) {
-				if (t != null && t.taskId == taskId) {
-					handler.removeCallbacks(t);
-					Log.v("test", "taskId cancel");
-					return;
-				}
-			}
+			handler.removeCallbacks(tasks.get(taskId));
+			tasks.remove(taskId);
+			SysLog.show("CoreBus", "任务结束"+taskId.toString());
+			SysLog.show("CoreBus", "任务结束tasks大小:"+tasks.size());
 		}
+	}
+
+	public void removeQueryTaskAll() {
+
+           for (Entry<UUID, CallQueryTask> keys:tasks.entrySet()) {
+        	   handler.removeCallbacks(keys.getValue());
+		  }
+           tasks.clear();
 	}
 
 }

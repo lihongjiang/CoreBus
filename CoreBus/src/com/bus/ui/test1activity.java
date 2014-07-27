@@ -1,13 +1,14 @@
 package com.bus.ui;
 
+import java.util.UUID;
 
 import com.bus.querytask.CoreBus;
-import com.bus.querytask.CoreThread;
 import com.bus.querytask.QueryTask;
 
 import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
+
 /**
  * @descripton 单核单任务框架测试
  * @author lihongjiang
@@ -17,9 +18,9 @@ public class test1activity extends Activity {
 
 	CoreBus qb;
 	CoreBus qb2;
-	CoreThread task;
-	CoreThread task2;
-	int i,j= 0;
+	QueryTask task;
+	QueryTask task2;
+	int i, j = 0;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -27,47 +28,31 @@ public class test1activity extends Activity {
 		super.onCreate(savedInstanceState);
 
 		qb = new CoreBus("CPU1");
-		qb2= new CoreBus("CPU2");
-		task = new CoreThread(new QueryTask() {
+		qb2 = new CoreBus("CPU2");
+		task = new QueryTask(UUID.randomUUID()) {
 
 			@Override
 			public void onComplete() {
-				setTitle("你好帅啊");
-				Log.v("test", i+"你好帅啊==");
+			
 			}
 
 			@Override
 			public void doTask() {
-				try {
-					Thread.sleep(600);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				i++;
-				Log.v("test", i+"==");
+
 			}
-		}, 12);
-		task2 = new CoreThread(new QueryTask() {
+		};
+		task2 = new QueryTask(UUID.randomUUID()) {
 
 			@Override
 			public void onComplete() {
-				setTitle("你好帅啊");
-				Log.v("test", j+"你好帅啊");
+			
 			}
 
 			@Override
 			public void doTask() {
-				j++;
-				try {
-					Thread.sleep(600);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				Log.v("test", j+"");
+
 			}
-		}, 15);
+		};
 		qb.postQueryTask(task);
 		qb2.postQueryTask(task2);
 		qb.postQueryTask(task);
@@ -80,7 +65,7 @@ public class test1activity extends Activity {
 		qb2.postQueryTask(task2);
 		qb.postQueryTask(task);
 		qb2.postQueryTask(task2);
-		
+
 	}
 
 	@Override
@@ -88,6 +73,7 @@ public class test1activity extends Activity {
 		if (qb != null) {
 			// 移除消息或者线程
 			qb.removeQueryTask(task);
+			qb2.removeQueryTask(task2);
 		}
 		super.onDestroy();
 	}
